@@ -156,7 +156,7 @@ func (e *Engine) checkIsAllowed(ctx context.Context, r *RelationTuple, restDepth
 
 	relation, err := e.astRelationFor(ctx, r)
 	if err == nil && relation.UsersetRewrite != nil {
-		checks = append(checks, e.checkUsersetRewrite(ctx, r, relation.UsersetRewrite))
+		checks = append(checks, e.checkUsersetRewrite(ctx, r, relation.UsersetRewrite, restDepth))
 	}
 
 	return unionCheckFn(ctx, checks)
@@ -174,7 +174,12 @@ func checkNotImplemented(_ context.Context, resultCh chan<- checkgroup.Result) {
 
 type setOperation func(ctx context.Context, checks []checkgroup.Func) checkgroup.Result
 
-func (e *Engine) checkUsersetRewrite(ctx context.Context, r *RelationTuple, rewrite *ast.UsersetRewrite) checkgroup.Func {
+func (e *Engine) checkUsersetRewrite(
+	ctx context.Context,
+	r *RelationTuple,
+	rewrite *ast.UsersetRewrite,
+	restDepth int,
+) checkgroup.Func {
 	e.d.Logger().
 		WithField("request", r.String()).
 		Trace("check userset rewrite")
@@ -196,11 +201,11 @@ func (e *Engine) checkUsersetRewrite(ctx context.Context, r *RelationTuple, rewr
 
 	for _, c := range rewrite.Children.ComputedUsersets {
 		c := c
-		checks = append(checks, e.checkComputedUserset(ctx, r, &c))
+		checks = append(checks, e.checkComputedUserset(ctx, r, &c, restDepth))
 	}
 	for _, c := range rewrite.Children.TupleToUsersets {
 		c := c
-		checks = append(checks, e.checkTupleToUserset(ctx, r, &c))
+		checks = append(checks, e.checkTupleToUserset(ctx, r, &c, restDepth))
 	}
 
 	return func(ctx context.Context, resultCh chan<- checkgroup.Result) {
@@ -208,7 +213,12 @@ func (e *Engine) checkUsersetRewrite(ctx context.Context, r *RelationTuple, rewr
 	}
 }
 
-func (e *Engine) checkComputedUserset(ctx context.Context, r *RelationTuple, userset *ast.ComputedUserset) checkgroup.Func {
+func (e *Engine) checkComputedUserset(
+	ctx context.Context,
+	r *RelationTuple,
+	userset *ast.ComputedUserset,
+	restDepth int,
+) checkgroup.Func {
 	e.d.Logger().
 		WithField("request", r.String()).
 		WithField("computed userset relation", userset.Relation).
@@ -222,11 +232,16 @@ func (e *Engine) checkComputedUserset(ctx context.Context, r *RelationTuple, use
 			Relation:  userset.Relation,
 			Subject:   r.Subject,
 		},
-		100,
+		restDepth,
 	)
 }
 
-func (e *Engine) checkTupleToUserset(ctx context.Context, r *RelationTuple, userset *ast.TupleToUserset) checkgroup.Func {
+func (e *Engine) checkTupleToUserset(
+	ctx context.Context,
+	r *RelationTuple,
+	userset *ast.TupleToUserset,
+	restDepth int,
+) checkgroup.Func {
 	e.d.Logger().
 		WithField("request", r.String()).
 		WithField("tuple to userset relation", userset.Relation).
@@ -266,7 +281,7 @@ func (e *Engine) checkTupleToUserset(ctx context.Context, r *RelationTuple, user
 						Relation:  userset.ComputedUsersetRelation,
 						Subject:   r.Subject,
 					},
-					100,
+					restDepth-1,
 				))
 			}
 		}
